@@ -2,10 +2,9 @@ name: Nginx Builder
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "master", "feat/**" ]
     paths-ignore:
       - '**.md'
-      - '.github/workflows/**'
   workflow_dispatch:
   schedule:
     - cron: '0 0 * * 1' # Weekly updates
