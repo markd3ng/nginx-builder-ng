@@ -15,9 +15,20 @@ SRC_DIR="${WORKDIR}/src"
 OUTPUT_DIR="${WORKDIR}/output"
 INSTALL_DIR="/tmp/nginx-build"
 
-# PCRE2 & Zlib Versions (Stable)
-PCRE2_VERSION="10.42"
-ZLIB_VERSION="1.3.1"
+# Source Pinned Versions
+if [ -f "${WORKDIR}/versions.env" ]; then
+    source "${WORKDIR}/versions.env"
+    log "Loaded Configuration from versions.env"
+else
+    log "${RED}ERROR: versions.env not found!${NC}"
+    exit 1
+fi
+
+# Validate Required Versions
+if [ -z "$NGINX_VERSION" ] || [ -z "$OPENSSL_VERSION" ] || [ -z "$PCRE2_VERSION" ] || [ -z "$ZLIB_VERSION" ]; then
+    log "${RED}ERROR: One or more versions are missing in versions.env!${NC}"
+    exit 1
+fi
 
 mkdir -p ${SRC_DIR} ${OUTPUT_DIR} ${INSTALL_DIR}
 
@@ -25,15 +36,6 @@ LOG_FILE="/build/build.log" # Optional, but stdout is fine.
 
 log() {
     echo -e "${BLUE}[BUILD]${NC} $1"
-}
-
-get_latest_git_tag() {
-    local repo=$1
-    local filter=$2
-    # Redirect log to stderr so it doesn't pollute the captured stdout
-    log "Finding latest tag for ${repo}..." >&2
-    git ls-remote --tags --refs --sort='v:refname' https://github.com/${repo}.git \
-        | grep -oE "${filter}" | tail -n1
 }
 
 clean_download() {
@@ -58,22 +60,12 @@ clean_download() {
     fi
 }
 
-# --- 1. Resolve Versions ---
-log "Resolving Versions (Rolling Release Mode)..."
-
-# Nginx (Latest Release 1.x)
-if [ -z "$NGINX_VERSION" ]; then
-    NGINX_TAG=$(get_latest_git_tag "nginx/nginx" "release-[0-9.]+")
-    NGINX_VERSION=${NGINX_TAG#release-}
-fi
-log "Target Nginx Version: ${GREEN}${NGINX_VERSION}${NC}"
-
-# OpenSSL (Latest 3.x)
-if [ -z "$OPENSSL_VERSION" ]; then
-    OPENSSL_TAG=$(get_latest_git_tag "openssl/openssl" "openssl-3\.[0-9.]+")
-    OPENSSL_VERSION=${OPENSSL_TAG#openssl-}
-fi
-log "Target OpenSSL Version: ${GREEN}${OPENSSL_VERSION}${NC}"
+# --- 1. Version Info ---
+log "Target Versions:"
+log "  Nginx:   ${GREEN}${NGINX_VERSION}${NC}"
+log "  OpenSSL: ${GREEN}${OPENSSL_VERSION}${NC}"
+log "  PCRE2:   ${GREEN}${PCRE2_VERSION}${NC}"
+log "  Zlib:    ${GREEN}${ZLIB_VERSION}${NC}"
 
 # --- 2. Download Sources ---
 cd ${SRC_DIR}

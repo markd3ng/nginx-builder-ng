@@ -36,15 +36,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         
-      - name: Resolve Nginx Version (Mainline)
+      - name: Resolve Nginx Version (Env)
         id: nginx_version
         run: |
-          # Resolve latest Mainline version (usually the latest tag)
-          TAG=$(git ls-remote --tags --refs --sort='v:refname' https://github.com/nginx/nginx.git | grep -oE "release-[0-9.]+" | tail -n1)
-          VERSION=${TAG#release-}
-          echo "Found Nginx Version: $VERSION"
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          # Load pinned versions
+          source versions.env
+          echo "Using Pinned Nginx Version: $NGINX_VERSION"
+          echo "VERSION=$NGINX_VERSION" >> $GITHUB_ENV
+          echo "version=$NGINX_VERSION" >> $GITHUB_OUTPUT
       
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -108,9 +107,8 @@ jobs:
       - name: Resolve Nginx Version (Again for Release)
         id: nginx_version_release
         run: |
-          TAG=$(git ls-remote --tags --refs --sort='v:refname' https://github.com/nginx/nginx.git | grep -oE "release-[0-9.]+" | tail -n1)
-          VERSION=${TAG#release-}
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          source versions.env
+          echo "VERSION=$NGINX_VERSION" >> $GITHUB_ENV
           
       - name: Prepare Release Files
         run: |
