@@ -15,6 +15,10 @@ SRC_DIR="${WORKDIR}/src"
 OUTPUT_DIR="${WORKDIR}/output"
 INSTALL_DIR="/tmp/nginx-build"
 
+log() {
+    echo -e "${BLUE}[BUILD]${NC} $1"
+}
+
 # Source Pinned Versions
 if [ -f "${WORKDIR}/versions.env" ]; then
     source "${WORKDIR}/versions.env"
@@ -34,9 +38,7 @@ mkdir -p ${SRC_DIR} ${OUTPUT_DIR} ${INSTALL_DIR}
 
 LOG_FILE="/build/build.log" # Optional, but stdout is fine.
 
-log() {
-    echo -e "${BLUE}[BUILD]${NC} $1"
-}
+
 
 clean_download() {
     local url=$1

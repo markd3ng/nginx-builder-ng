@@ -31,7 +31,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy Build Script
 COPY build.sh /build.sh
-RUN dos2unix /build.sh && chmod +x /build.sh
+COPY versions.env /build/versions.env
+RUN dos2unix /build.sh /build/versions.env && chmod +x /build.sh
 
 # Execute Build
 # This script manages versions, downloads, and compilation
