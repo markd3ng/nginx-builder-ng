@@ -42,36 +42,23 @@ This builder includes a comprehensive suite of modules:
 
 ## 🛠️ Architecture
 
-This project is the **root** of the custom Nginx Proxy Manager build chain.
-
 ```mermaid
 graph TD
-    subgraph "Level 1: The Builder (This Repo)"
-        Code[Nginx Source] --> Build[nginx-builder-ng]
-        Build --> Assets[GitHub Release Assets]
-        Assets --> Tar[nginx-custom.tar.gz]
+    subgraph "Nginx Builder NG"
+        Code[Nginx Source] --> Build_x86[Build x86_64]
+        Code --> Build_ARM[Build ARM64]
+        
+        Build_x86 --> Assets[Release Assets]
+        Build_ARM --> Assets
+        
+        Assets --> TarX86[nginx-mainline-mk-...-linux-amd64.tar.gz]
+        Assets --> TarARM[nginx-mainline-mk-...-linux-arm64.tar.gz]
         Assets --> ModList[expected_modules.txt]
-    end
-
-    subgraph "Level 2: The Base Image"
-        Assets --> Base[nginx-base-image]
-        Base --> DockerBase[Docker Image: nginx-base-image:latest]
-    end
-
-    subgraph "Level 3: The Application"
-        DockerBase --> App[nginx-proxy-manager-app]
-        App --> Final[Final Application Image]
+        Assets --> Checksums[sha256sums-*.txt]
     end
 ```
 
 ## ⚙️ Usage
-
-### GitHub Actions (Automated)
-
-This repository is configured with a **Serial Build Pipeline**:
-1.  **x86 Build**: Compiles for AMD64.
-2.  **ARM Build**: Triggered only if x86 succeeds (ensures atomic releases).
-3.  **Release**: Uploads `nginx-custom.tar.gz` and `expected_modules.txt` to GitHub Releases.
 
 ### Consumption in Dockerfile
 
@@ -79,11 +66,16 @@ To use the artifacts from this builder in your own project:
 
 ```dockerfile
 # Example Dockerfile
-ARG NGINX_VERSION=1.29.4-40
+# TAG format: nginx-mainline-mk/{VERSION}-{RUN_NUMBER}
+ARG RELEASE_TAG=nginx-mainline-mk%2F1.29.4-40
+ARG VERSION=1.29.4
+ARG RUN_NUM=40
+ARG ARCH=amd64
+
 FROM debian:bookworm-slim
 
-# Download Artifacts
-ADD https://github.com/markd3ng/nginx-builder-ng/releases/download/nginx-mainline-mk%2F${NGINX_VERSION}/nginx-custom.tar.gz /tmp/nginx.tar.gz
+# Download Artifacts (Dynamic Filename)
+ADD https://github.com/markd3ng/nginx-builder-ng/releases/download/${RELEASE_TAG}/nginx-mainline-mk-${VERSION}-${RUN_NUM}-linux-${ARCH}.tar.gz /tmp/nginx.tar.gz
 
 # Install
 RUN tar -xzf /tmp/nginx.tar.gz -C / \
