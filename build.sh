@@ -206,6 +206,18 @@ make -j$(nproc)
 make install DESTDIR=${INSTALL_DIR}
 
 # --- 5. Post-Install Setup ---
+log "Optimization: Stripping binary..."
+NGINX_BIN="${INSTALL_DIR}/usr/sbin/nginx"
+
+log "Size BEFORE strip:"
+ls -lh ${NGINX_BIN}
+
+# Strip debug symbols
+strip --strip-unneeded ${NGINX_BIN}
+
+log "Size AFTER strip:"
+ls -lh ${NGINX_BIN}
+
 log "Installing Lua Libs..."
 LUA_LIB_DIR="${INSTALL_DIR}/usr/local/share/lua/5.1"
 mkdir -p ${LUA_LIB_DIR}
