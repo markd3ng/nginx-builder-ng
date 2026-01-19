@@ -1,0 +1,216 @@
+name: Integration Test
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      issue_number:
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  test-binary:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: nginx-mainline-mk-${{ inputs.version }}-amd64
+          path: ./
+
+      - name: Install Runtime Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            apache2-utils libmaxminddb0 libxml2 libxslt1.1 libgd3 \
+            libpam0g libzstd1 libpcre2-8-0 openssl perl tzdata moreutils
+
+      - name: Extract and Install
+        id: install
+        run: |
+          # 查找文件，以防版本号匹配有细微差异（虽然通常不会）
+          TAR_FILE=$(find . -name "nginx-mainline-mk-*-linux-amd64.tar.gz" | head -n 1)
+          
+          if [ -z "$TAR_FILE" ]; then
+             echo "Error: Artifact file not found!"
+             ls -R
+             echo "status=failure" >> $GITHUB_OUTPUT
+             exit 1
+          fi
+
+          echo "Installing $TAR_FILE..."
+          if sudo tar -xzf "$TAR_FILE" -C /; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            sudo ldconfig
+          else
+            echo "status=failure" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+      - name: Verify Version info
+        id: version_check
+        run: |
+          if OUTPUT=$(/usr/sbin/nginx -V 2>&1); then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "$OUTPUT" > nginx_info.txt
+          else
+            echo "status=failure" >> $GITHUB_OUTPUT
+            echo "Failed to get version info" > nginx_info.txt
+          fi
+
+      - name: Start and Verify Server Header
+        id: server_header
+        run: |
+          sudo mkdir -p /var/log/nginx /var/cache/nginx
+          sudo /usr/sbin/nginx
+          sleep 2
+          
+          RESPONSE=$(curl -I -s http://localhost || echo "Curl failed")
+          echo "$RESPONSE"
+          
+          if echo "$RESPONSE" | grep -q "Server: nginx-mainline-mk"; then
+            echo "status=success" >> $GITHUB_OUTPUT
+          else
+            echo "status=failure" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Verify Compiled Modules
+        id: modules_check
+        run: |
+          # Find the file wherever it is (root or output/ subdir)
+          EXPECTED_FILE=$(find . -name "expected_modules.txt" | head -n 1)
+          
+          if [ -z "$EXPECTED_FILE" ]; then
+             echo "⚠️ No expected_modules.txt found in artifact."
+             ls -R
+             echo "status=skipped" >> $GITHUB_OUTPUT
+             echo "Skipped (File not found)" > modules_report.txt
+             exit 0
+          fi
+          
+          echo "Checking modules against: $EXPECTED_FILE"
+          FAILURES=0
+          
+          # Capture nginx -V output once
+          NGINX_V=$(/usr/sbin/nginx -V 2>&1)
+          MODULES_REPORT=""
+          
+          while read -r MODULE; do
+            [[ "$MODULE" =~ ^#.* ]] && continue 
+            [ -z "$MODULE" ] && continue 
+            
+            # Clean module name just in case
+            MODULE=$(echo "$MODULE" | tr -d '\r')
+            
+            if echo "$NGINX_V" | grep -q "$MODULE"; then
+              echo "✅ Module $MODULE found"
+              MODULES_REPORT+="- ✅ $MODULE\n"
+            else
+              echo "❌ Module $MODULE MISSING"
+              MODULES_REPORT+="- ❌ $MODULE MISSING\n"
+              FAILURES=$((FAILURES+1))
+            fi
+          done < "$EXPECTED_FILE"
+          
+          echo -e "$MODULES_REPORT" > modules_report.txt
+          
+          if [ "$FAILURES" -gt 0 ]; then
+             echo "Found $FAILURES missing modules!"
+             echo "status=failure" >> $GITHUB_OUTPUT
+             exit 1 
+          else
+             echo "status=success" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate Report
+        if: always()
+        run: |
+          # 收集结果
+          INSTALL_STATUS="${{ steps.install.outcome == 'success' && '✅ PASS' || '❌ FAIL' }}"
+          VERSION_STATUS="${{ steps.version_check.outcome == 'success' && '✅ PASS' || '❌ FAIL' }}"
+          HEADER_STATUS="${{ steps.server_header.outcome == 'success' && '✅ PASS' || '❌ FAIL' }}"
+          MODULES_STATUS="${{ steps.modules_check.outcome == 'success' && '✅ PASS' || (steps.modules_check.outcome == 'skipped' && '⚠️ SKIP' || '❌ FAIL') }}"
+          
+          if [ "${{ steps.install.outcome }}" == "success" ] && \
+             [ "${{ steps.version_check.outcome }}" == "success" ] && \
+             [ "${{ steps.server_header.outcome }}" == "success" ] && \
+             ( [ "${{ steps.modules_check.outcome }}" == "success" ] || [ "${{ steps.modules_check.outcome }}" == "skipped" ] ); then
+             STATUS="✅ 通过"
+             EMOJI="🎉"
+          else
+             STATUS="❌ 失败"
+             EMOJI="⚠️"
+          fi
+          
+          # 生成 markdown
+          cat << EOF > test_report.md
+          # $EMOJI Nginx Source 本地测试报告
+          
+          ## 📋 信息
+          | 项目 | 值 |
+          |:---|:---|
+          | 版本 | \`${{ inputs.version }}\` |
+          | 运行编号 | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
+          | 触发者 | @${{ github.actor }} |
+          
+          **总评: $STATUS**
+          
+          ## 📊 测试结果
+          | 测试项 | 结果 |
+          |:---|:---|
+          | 安装与解压 | $INSTALL_STATUS |
+          | 版本检查 (nginx -V) | $VERSION_STATUS |
+          | Server 头验证 | $HEADER_STATUS |
+          | 关键模块校验 | $MODULES_STATUS |
+          
+          ## 🔧 详细信息
+          ### 模块检查详情
+          \`\`\`
+          $(cat modules_report.txt 2>/dev/null || echo "N/A")
+          \`\`\`
+
+          ### Nginx Info
+          \`\`\`
+          $(cat nginx_info.txt 2>/dev/null || echo "N/A")
+          \`\`\`
+          
+          ---
+          *Report generated by GitHub Actions*
+          EOF
+
+      - name: Write Job Summary
+        if: always()
+        run: cat test_report.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: |
+             test_report.md
+             nginx_info.txt
+             modules_report.txt
+
+      - name: Comment on Issue
+        if: always() && inputs.issue_number != ''
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('test_report.md', 'utf8');
+            const issueNumber = '${{ inputs.issue_number }}';
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: report
+            });
