@@ -72,13 +72,14 @@ log "  Zlib:    ${GREEN}${ZLIB_VERSION}${NC}"
 # --- 2. Download Sources ---
 cd ${SRC_DIR}
 
-# Core
-clean_download "https://github.com/nginx/nginx.git" "nginx" 
-# Switch nginx to specific tag (use subshell to avoid changing main script directory)
-(cd nginx && git fetch --tags && git checkout release-${NGINX_VERSION})
+# Core (Tarball for speed and stability)
+log "Downloading Nginx Core..."
+clean_download "https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz" "nginx"
+# Note: failure here means version doesn't exist on nginx.org
 
-clean_download "https://github.com/openssl/openssl.git" "openssl"
-(cd openssl && git fetch --tags && git checkout openssl-${OPENSSL_VERSION})
+log "Downloading OpenSSL..."
+# OpenSSL GitHub Releases
+clean_download "https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz" "openssl"
 
 # Deps (Tarballs for stability/compat with Nginx auto-build)
 # Explicitly ensure we are in SRC_DIR
