@@ -68,7 +68,43 @@ jobs:
           name: nginx-mainline-mk-${{ env.VERSION }}-${{ github.run_number }}-${{ matrix.suffix }}
           path: |
             ./output/*.tar.gz
+            ./output/*.tar.gz
             ./output/expected_modules.txt
+            ./output/build_summary.json
+
+      - name: Generate Build Report
+        if: always()
+        id: report
+        run: |
+          echo "Processing Build Reports..."
+          
+          # Initialize report
+          echo "# 🏗️ Nginx Build Report (${{ matrix.suffix }})" > report.md
+          
+          if [ -f ./output/build_summary.json ]; then
+            cat ./output/build_summary.json | jq -r '
+              "## 📊 Build Metrics
+              | Metric | Value |
+              | :--- | :--- |
+              | **Nginx Version** | \(.nginx_version) |
+              | **OpenSSL Version** | \(.openssl_version) |
+              | **Size (Before Strip)** | \((.size_before_strip | tonumber / 1024 / 1024 | .*100 | round / 100)) MB |
+              | **Size (After Strip)** | \((.size_after_strip | tonumber / 1024 / 1024 | .*100 | round / 100)) MB |
+              | **Reduction** | \(((.size_before_strip | tonumber) - (.size_after_strip | tonumber)) / 1024 / 1024 | .*100 | round / 100) MB |
+              "
+            ' >> report.md
+          else
+             echo "⚠️ No build summary found." >> report.md
+          fi
+          
+          cat report.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: thollander/actions-comment-pull-request@v2
+        with:
+          filePath: report.md
+          comment_tag: build_report_${{ matrix.suffix }}
           
       - name: Generate Checksums
         if: github.ref == 'refs/heads/master'

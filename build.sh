@@ -214,12 +214,28 @@ NGINX_BIN="${INSTALL_DIR}/usr/sbin/nginx"
 
 log "Size BEFORE strip:"
 ls -lh ${NGINX_BIN}
+SIZE_BEFORE=$(stat -c%s "${NGINX_BIN}" 2>/dev/null || echo "0")
 
 # Strip debug symbols
 strip --strip-unneeded ${NGINX_BIN}
 
 log "Size AFTER strip:"
 ls -lh ${NGINX_BIN}
+SIZE_AFTER=$(stat -c%s "${NGINX_BIN}" 2>/dev/null || echo "0")
+
+# Generate Build Report
+log "Generating Build Report..."
+cat <<EOF > ${OUTPUT_DIR}/build_summary.json
+{
+  "nginx_version": "${NGINX_VERSION}",
+  "openssl_version": "${OPENSSL_VERSION}",
+  "pcre2_version": "${PCRE2_VERSION}",
+  "zlib_version": "${ZLIB_VERSION}",
+  "size_before_strip": ${SIZE_BEFORE},
+  "size_after_strip": ${SIZE_AFTER},
+  "build_date": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+}
+EOF
 
 log "Installing Lua Libs..."
 LUA_LIB_DIR="${INSTALL_DIR}/usr/local/share/lua/5.1"
