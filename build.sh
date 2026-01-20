@@ -19,6 +19,25 @@ log() {
     echo -e "${BLUE}[BUILD]${NC} $1"
 }
 
+verify_checksum() {
+    local file=$1
+    local expected_hash=$2
+    
+    if [ -z "$expected_hash" ]; then
+        log "${YELLOW}WARNING: No checksum provided for $file, skipping verification.${NC}"
+        return 0
+    fi
+
+    log "Verifying checksum for $file..."
+    echo "$expected_hash  $file" | sha256sum -c -
+    if [ $? -ne 0 ]; then
+        log "${RED}ERROR: Checksum mismatch for $file!${NC}"
+        log "${RED}Expected: $expected_hash${NC}"
+        exit 1
+    fi
+    log "${GREEN}Checksum verified: $file${NC}"
+}
+
 # Source Pinned Versions
 if [ -f "${WORKDIR}/versions.env" ]; then
     source "${WORKDIR}/versions.env"
@@ -51,7 +70,22 @@ clean_download() {
             ;;
         *)
             mkdir -p "$dir"
-            wget -qO- "$url" | tar xz -C "$dir" --strip-components=1
+            local filename=$(basename "$url")
+            wget -qO "$filename" "$url"
+            
+            # Verify checksum based on directory name (mapped to env vars)
+            local hash_var=""
+            case "$dir" in
+                "nginx") hash_var="$NGINX_SHA256" ;;
+                "openssl") hash_var="$OPENSSL_SHA256" ;;
+                "pcre2"*) hash_var="$PCRE2_SHA256" ;; # Match pcre2-10.42
+                "zlib"*) hash_var="$ZLIB_SHA256" ;; # Match zlib-1.3.1
+            esac
+            
+            verify_checksum "$filename" "$hash_var"
+            
+            tar xz -C "$dir" --strip-components=1 -f "$filename"
+            rm "$filename"
             ;;
     esac
     
