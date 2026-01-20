@@ -88,6 +88,7 @@ jobs:
               | :--- | :--- |
               | **Nginx Version** | \(.nginx_version) |
               | **OpenSSL Version** | \(.openssl_version) |
+              | **Checksum Verification** | \(.checksum_verified | if . then "✅ PASS" else "❌ FAIL" end) |
               | **Size (Before Strip)** | \((.size_before_strip | tonumber / 1024 / 1024 | .*100 | round / 100)) MB |
               | **Size (After Strip)** | \((.size_after_strip | tonumber / 1024 / 1024 | .*100 | round / 100)) MB |
               | **Reduction** | \(((.size_before_strip | tonumber) - (.size_after_strip | tonumber)) / 1024 / 1024 | .*100 | round / 100) MB |

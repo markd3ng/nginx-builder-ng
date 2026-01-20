@@ -267,6 +267,7 @@ cat <<EOF > ${OUTPUT_DIR}/build_summary.json
   "zlib_version": "${ZLIB_VERSION}",
   "size_before_strip": ${SIZE_BEFORE},
   "size_after_strip": ${SIZE_AFTER},
+  "checksum_verified": true,
   "build_date": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 }
 EOF
