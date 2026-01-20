@@ -140,7 +140,7 @@ export CFLAGS="-Wno-error"
 log "Customizing Server Header to nginx-mainline-mk..."
 sed -i 's|"nginx/"|"nginx-mainline-mk/"|g' src/core/nginx.h 
 
-./auto/configure \
+./configure \
     --prefix=/etc/nginx \
     --sbin-path=/usr/sbin/nginx \
     --modules-path=/usr/lib/nginx/modules \
