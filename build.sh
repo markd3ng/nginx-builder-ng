@@ -50,13 +50,13 @@ clean_download() {
             git clone --depth 1 --recursive "$url" "$dir"
             ;;
         *)
-            wget -qO- "$url" | tar xz
-            # Handle tarball naming variations if needed
+            mkdir -p "$dir"
+            wget -qO- "$url" | tar xz -C "$dir" --strip-components=1
             ;;
     esac
     
-    if [ ! -d "$dir" ]; then
-        log "${RED}ERROR: Failed to download $dir. Directory not found!${NC}"
+    if [ -z "$(ls -A $dir)" ]; then
+        log "${RED}ERROR: Failed to download $dir. Directory empty or not found!${NC}"
         ls -la
         exit 1
     fi
