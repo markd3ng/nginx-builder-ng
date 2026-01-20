@@ -57,6 +57,10 @@ mkdir -p ${SRC_DIR} ${OUTPUT_DIR} ${INSTALL_DIR}
 
 LOG_FILE="/build/build.log" # Optional, but stdout is fine.
 
+# Cache Directory (can be mounted)
+DOWNLOAD_CACHE_DIR="${WORKDIR}/downloads"
+mkdir -p "$DOWNLOAD_CACHE_DIR"
+
 
 
 clean_download() {
@@ -71,21 +75,43 @@ clean_download() {
         *)
             mkdir -p "$dir"
             local filename=$(basename "$url")
-            wget -qO "$filename" "$url"
+            local cached_file="${DOWNLOAD_CACHE_DIR}/${filename}"
             
-            # Verify checksum based on directory name (mapped to env vars)
+            # Verify checksum based on directory name
             local hash_var=""
             case "$dir" in
                 "nginx") hash_var="$NGINX_SHA256" ;;
                 "openssl") hash_var="$OPENSSL_SHA256" ;;
-                "pcre2"*) hash_var="$PCRE2_SHA256" ;; # Match pcre2-10.42
-                "zlib"*) hash_var="$ZLIB_SHA256" ;; # Match zlib-1.3.1
+                "pcre2"*) hash_var="$PCRE2_SHA256" ;; 
+                "zlib"*) hash_var="$ZLIB_SHA256" ;; 
             esac
+
+            # Check Cache
+            if [ -f "$cached_file" ]; then
+                log "${GREEN}Cache Hit:${NC} $cached_file"
+                # Optional: Verify checksum of cached file to be safe
+                if [ ! -z "$hash_var" ]; then
+                     echo "$hash_var  $cached_file" | sha256sum -c - >/dev/null 2>&1
+                     if [ $? -eq 0 ]; then
+                        log "Cached file verified."
+                        tar xz -C "$dir" --strip-components=1 -f "$cached_file"
+                        return 0
+                     else
+                        log "${YELLOW}Cached file invalid. Redownloading...${NC}"
+                        rm "$cached_file"
+                     fi
+                fi
+            fi
+
+            wget -qO "$cached_file" "$url"
             
-            verify_checksum "$filename" "$hash_var"
+            verify_checksum "$cached_file" "$hash_var"
             
-            tar xz -C "$dir" --strip-components=1 -f "$filename"
-            rm "$filename"
+            tar xz -C "$dir" --strip-components=1 -f "$cached_file"
+            
+            # Sync to Output for caching persistence
+            mkdir -p "${OUTPUT_DIR}/downloads"
+            cp -n "$cached_file" "${OUTPUT_DIR}/downloads/" 2>/dev/null || true
             ;;
     esac
     
@@ -107,20 +133,43 @@ log "  Zlib:    ${GREEN}${ZLIB_VERSION}${NC}"
 cd ${SRC_DIR}
 
 # Core (Tarball for speed and stability)
-log "Downloading Nginx Core..."
-clean_download "https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz" "nginx"
-# Note: failure here means version doesn't exist on nginx.org
+# Parallel Download Block
+log "Starting Parallel Downloads..."
+pids=""
 
-log "Downloading OpenSSL..."
-# OpenSSL GitHub Releases
-clean_download "https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz" "openssl"
+(
+    log "Downloading Nginx Core..."
+    clean_download "https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz" "nginx"
+) &
+pids="$pids $!"
 
-# Deps (Tarballs for stability/compat with Nginx auto-build)
-# Explicitly ensure we are in SRC_DIR
-cd ${SRC_DIR}
-log "Downloading PCRE2 & Zlib..."
-clean_download "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-${PCRE2_VERSION}/pcre2-${PCRE2_VERSION}.tar.gz" "pcre2-${PCRE2_VERSION}"
-clean_download "https://github.com/madler/zlib/releases/download/v${ZLIB_VERSION}/zlib-${ZLIB_VERSION}.tar.gz" "zlib-${ZLIB_VERSION}"
+(
+    log "Downloading OpenSSL..."
+    clean_download "https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz" "openssl"
+) &
+pids="$pids $!"
+
+(
+    # Explicitly ensure we are in SRC_DIR for background job
+    cd ${SRC_DIR}
+    log "Downloading PCRE2..."
+    clean_download "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-${PCRE2_VERSION}/pcre2-${PCRE2_VERSION}.tar.gz" "pcre2-${PCRE2_VERSION}"
+) &
+pids="$pids $!"
+
+(
+    cd ${SRC_DIR}
+    log "Downloading Zlib..."
+    clean_download "https://github.com/madler/zlib/releases/download/v${ZLIB_VERSION}/zlib-${ZLIB_VERSION}.tar.gz" "zlib-${ZLIB_VERSION}"
+) &
+pids="$pids $!"
+
+# Wait for all downloads
+for pid in $pids; do
+    wait $pid || exit 1
+done
+
+log "${GREEN}Parallel Downloads Complete.${NC}"
 
 # Modules (Git Clones)
 log "Downloading Modules..."

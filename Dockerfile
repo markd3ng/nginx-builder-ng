@@ -32,6 +32,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy Build Script
 COPY build.sh /build.sh
 COPY versions.env /build/versions.env
+# Copy cached downloads if available (must ensure dir exists in context)
+COPY downloads /build/downloads/
 RUN dos2unix /build.sh /build/versions.env && chmod +x /build.sh
 
 # Execute Build
@@ -42,6 +44,6 @@ RUN /bin/bash /build.sh
 
 # Export Stage
 # This allows 'docker build --output type=local,dest=.' to extract the tarball
+# This allows 'docker build --output type=local,dest=.' to extract the tarball
 FROM scratch AS export
-COPY --from=builder /build/output/nginx-custom.tar.gz /
-COPY --from=builder /build/output/expected_modules.txt /
+COPY --from=builder /build/output /

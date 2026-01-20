@@ -44,6 +44,16 @@ jobs:
           echo "VERSION=$NGINX_VERSION" >> $GITHUB_ENV
           echo "version=$NGINX_VERSION" >> $GITHUB_OUTPUT
       
+      - name: Cache Sources
+        uses: actions/cache@v3
+        with:
+          path: downloads
+          key: source-cache-${{ hashFiles('versions.env') }}
+          
+      - name: Prepare Cache Directory
+        run: mkdir -p downloads
+
+      
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       
@@ -61,6 +71,14 @@ jobs:
       - name: Rename Artifact
         run: |
           mv ./output/nginx-custom.tar.gz ./output/nginx-mainline-mk-${{ env.VERSION }}-${{ github.run_number }}-linux-${{ matrix.suffix }}.tar.gz
+          
+      - name: Update Cache & Clean Artifacts
+        run: |
+           if [ -d "./output/downloads" ]; then
+              echo "Updating cache from build output..."
+              mv ./output/downloads/* downloads/
+              rm -rf ./output/downloads
+           fi
           
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
