@@ -36,9 +36,9 @@ jobs:
             tzdata \
             luajit
           
-          # Create www-data user and group for nginx
-          addgroup -g 82 -S www-data
-          adduser -u 82 -D -S -G www-data www-data
+          # Create www-data user and group for nginx (if not exists)
+          addgroup -g 82 -S www-data 2>/dev/null || true
+          adduser -u 82 -D -S -G www-data www-data 2>/dev/null || true
 
       - name: Download Artifact
         uses: actions/download-artifact@v4
