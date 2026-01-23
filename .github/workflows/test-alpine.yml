@@ -1,4 +1,4 @@
-name: Integration Test
+name: Alpine Integration Test
 on:
   workflow_call:
     inputs:
@@ -11,31 +11,42 @@ on:
         default: ""
 
 jobs:
-  test-binary:
+  test-alpine-binary:
     runs-on: ubuntu-latest
+    container:
+      image: alpine:3.19
     permissions:
       contents: read
       issues: write
       pull-requests: write
     steps:
+      - name: Install Runtime Dependencies
+        run: |
+          apk add --no-cache \
+            curl \
+            libmaxminddb \
+            libxml2 \
+            libxslt \
+            gd \
+            linux-pam \
+            zstd-libs \
+            pcre2 \
+            openssl \
+            perl \
+            tzdata \
+            luajit
+
       - name: Download Artifact
         uses: actions/download-artifact@v4
         with:
-          name: nginx-mainline-mk-${{ inputs.version }}-linux-amd64
+          name: nginx-mainline-mk-${{ inputs.version }}-alpine-amd64
           path: ./
-
-      - name: Install Runtime Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            apache2-utils libmaxminddb0 libxml2 libxslt1.1 libgd3 \
-            libpam0g libzstd1 libpcre2-8-0 openssl perl tzdata moreutils
 
       - name: Extract and Install
         id: install
         run: |
           # 查找文件，以防版本号匹配有细微差异（虽然通常不会）
-          TAR_FILE=$(find . -name "nginx-mainline-mk-*-linux-amd64.tar.gz" | head -n 1)
+          TAR_FILE=$(find . -name "nginx-mainline-mk-*-alpine-amd64.tar.gz" | head -n 1)
           
           if [ -z "$TAR_FILE" ]; then
              echo "Error: Artifact file not found!"
@@ -45,9 +56,8 @@ jobs:
           fi
 
           echo "Installing $TAR_FILE..."
-          if sudo tar -xzf "$TAR_FILE" -C /; then
+          if tar -xzf "$TAR_FILE" -C /; then
             echo "status=success" >> $GITHUB_OUTPUT
-            sudo ldconfig
           else
             echo "status=failure" >> $GITHUB_OUTPUT
             exit 1
@@ -67,8 +77,8 @@ jobs:
       - name: Start and Verify Server Header
         id: server_header
         run: |
-          sudo mkdir -p /var/log/nginx /var/cache/nginx
-          sudo /usr/sbin/nginx
+          mkdir -p /var/log/nginx /var/cache/nginx
+          /usr/sbin/nginx
           sleep 2
           
           RESPONSE=$(curl -I -s http://localhost || echo "Curl failed")
@@ -102,23 +112,26 @@ jobs:
           MODULES_REPORT=""
           
           while read -r MODULE; do
-            [[ "$MODULE" =~ ^#.* ]] && continue 
-            [ -z "$MODULE" ] && continue 
+            # Skip comments and empty lines
+            case "$MODULE" in
+              \#*) continue ;;
+              "") continue ;;
+            esac
             
             # Clean module name just in case
             MODULE=$(echo "$MODULE" | tr -d '\r')
             
             if echo "$NGINX_V" | grep -q "$MODULE"; then
               echo "✅ Module $MODULE found"
-              MODULES_REPORT+="- ✅ $MODULE\n"
+              MODULES_REPORT="${MODULES_REPORT}- ✅ $MODULE\n"
             else
               echo "❌ Module $MODULE MISSING"
-              MODULES_REPORT+="- ❌ $MODULE MISSING\n"
+              MODULES_REPORT="${MODULES_REPORT}- ❌ $MODULE MISSING\n"
               FAILURES=$((FAILURES+1))
             fi
           done < "$EXPECTED_FILE"
           
-          echo -e "$MODULES_REPORT" > modules_report.txt
+          printf "%b" "$MODULES_REPORT" > modules_report.txt
           
           if [ "$FAILURES" -gt 0 ]; then
              echo "Found $FAILURES missing modules!"
@@ -132,15 +145,36 @@ jobs:
         if: always()
         run: |
           # 收集结果
-          INSTALL_STATUS="${{ steps.install.outcome == 'success' && '✅ PASS' || '❌ FAIL' }}"
-          VERSION_STATUS="${{ steps.version_check.outcome == 'success' && '✅ PASS' || '❌ FAIL' }}"
-          HEADER_STATUS="${{ steps.server_header.outcome == 'success' && '✅ PASS' || '❌ FAIL' }}"
-          MODULES_STATUS="${{ steps.modules_check.outcome == 'success' && '✅ PASS' || (steps.modules_check.outcome == 'skipped' && '⚠️ SKIP' || '❌ FAIL') }}"
+          if [ "${{ steps.install.outcome }}" = "success" ]; then
+            INSTALL_STATUS="✅ PASS"
+          else
+            INSTALL_STATUS="❌ FAIL"
+          fi
           
-          if [ "${{ steps.install.outcome }}" == "success" ] && \
-             [ "${{ steps.version_check.outcome }}" == "success" ] && \
-             [ "${{ steps.server_header.outcome }}" == "success" ] && \
-             ( [ "${{ steps.modules_check.outcome }}" == "success" ] || [ "${{ steps.modules_check.outcome }}" == "skipped" ] ); then
+          if [ "${{ steps.version_check.outcome }}" = "success" ]; then
+            VERSION_STATUS="✅ PASS"
+          else
+            VERSION_STATUS="❌ FAIL"
+          fi
+          
+          if [ "${{ steps.server_header.outcome }}" = "success" ]; then
+            HEADER_STATUS="✅ PASS"
+          else
+            HEADER_STATUS="❌ FAIL"
+          fi
+          
+          if [ "${{ steps.modules_check.outcome }}" = "success" ]; then
+            MODULES_STATUS="✅ PASS"
+          elif [ "${{ steps.modules_check.outcome }}" = "skipped" ]; then
+            MODULES_STATUS="⚠️ SKIP"
+          else
+            MODULES_STATUS="❌ FAIL"
+          fi
+          
+          if [ "${{ steps.install.outcome }}" = "success" ] && \
+             [ "${{ steps.version_check.outcome }}" = "success" ] && \
+             [ "${{ steps.server_header.outcome }}" = "success" ] && \
+             ( [ "${{ steps.modules_check.outcome }}" = "success" ] || [ "${{ steps.modules_check.outcome }}" = "skipped" ] ); then
              STATUS="✅ 通过"
              EMOJI="🎉"
           else
@@ -150,12 +184,13 @@ jobs:
           
           # 生成 markdown
           cat << EOF > test_report.md
-          # $EMOJI Nginx Source 本地测试报告
+          # $EMOJI Nginx Alpine 本地测试报告
           
           ## 📋 信息
           | 项目 | 值 |
           |:---|:---|
           | 版本 | \`${{ inputs.version }}\` |
+          | 平台 | Alpine Linux 3.19 (musl libc) |
           | 运行编号 | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
           | 触发者 | @${{ github.actor }} |
           
@@ -192,7 +227,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-report
+          name: test-report-alpine
           path: |
              test_report.md
              nginx_info.txt

@@ -1,0 +1,61 @@
+# syntax=docker/dockerfile:1
+FROM alpine:3.19 AS builder
+
+# Install Build Dependencies
+# Mapping from Debian packages to Alpine equivalents:
+# build-essential -> build-base
+# libssl-dev -> openssl-dev
+# libpcre2-dev -> pcre2-dev
+# zlib1g-dev -> zlib-dev
+# libzstd-dev -> zstd-dev
+# libgd-dev -> gd-dev
+# libxslt1-dev -> libxslt-dev
+# libmaxminddb-dev -> libmaxminddb-dev
+# libpam0g-dev -> linux-pam-dev
+# libperl-dev -> perl-dev
+# libreadline-dev -> readline-dev
+# libncurses5-dev -> ncurses-dev
+# libxml2-dev -> libxml2-dev
+# (LuaJIT) -> luajit-dev (Alpine native package)
+RUN apk add --no-cache \
+    build-base \
+    git \
+    curl \
+    wget \
+    ca-certificates \
+    autoconf \
+    automake \
+    libtool \
+    pkgconfig \
+    gd-dev \
+    libxslt-dev \
+    libmaxminddb-dev \
+    linux-pam-dev \
+    perl-dev \
+    readline-dev \
+    ncurses-dev \
+    pcre2-dev \
+    openssl-dev \
+    zlib-dev \
+    zstd-dev \
+    libxml2-dev \
+    luajit-dev \
+    dos2unix
+
+# Copy Build Script
+COPY build-alpine.sh /build-alpine.sh
+COPY versions.env /build/versions.env
+# Copy cached downloads if available (must ensure dir exists in context)
+COPY downloads /build/downloads/
+RUN dos2unix /build-alpine.sh /build/versions.env && chmod +x /build-alpine.sh
+
+# Execute Build
+# This script manages versions, downloads, and compilation
+ARG NGINX_VERSION
+ENV NGINX_VERSION=${NGINX_VERSION}
+RUN /bin/sh /build-alpine.sh
+
+# Export Stage
+# This allows 'docker build --output type=local,dest=.' to extract the tarball
+FROM scratch AS export
+COPY --from=builder /build/output /

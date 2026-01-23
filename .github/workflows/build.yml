@@ -18,16 +18,12 @@ env:
   TEST_REPORT_ISSUE: "1"
 
 jobs:
-  build:
+  build-debian:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - platform: linux/amd64
-            suffix: amd64
-          - platform: linux/arm64
-            suffix: arm64
+        arch: [amd64, arm64]
     outputs:
       version: ${{ steps.nginx_version.outputs.version }}
     
@@ -38,6 +34,17 @@ jobs:
       - name: Resolve Nginx Version (Env)
         id: nginx_version
         run: |
+          # Ensure we're in the correct directory
+          cd $GITHUB_WORKSPACE
+          
+          # Verify versions.env exists
+          if [ ! -f "versions.env" ]; then
+            echo "❌ ERROR: versions.env file not found in $GITHUB_WORKSPACE"
+            echo "Available files:"
+            ls -la
+            exit 1
+          fi
+          
           # Load pinned versions
           source versions.env
           echo "Using Pinned Nginx Version: $NGINX_VERSION"
@@ -63,14 +70,14 @@ jobs:
       - name: Build and Export
         run: |
           docker buildx build \
-            --platform ${{ matrix.platform }} \
+            --platform linux/${{ matrix.arch }} \
             --build-arg NGINX_VERSION=${{ env.VERSION }} \
             --output type=local,dest=./output \
             .
       
       - name: Rename Artifact
         run: |
-          mv ./output/nginx-custom.tar.gz ./output/nginx-mainline-mk-${{ env.VERSION }}-${{ github.run_number }}-linux-${{ matrix.suffix }}.tar.gz
+          mv ./output/nginx-custom.tar.gz ./output/nginx-mainline-mk-${{ env.VERSION }}-${{ github.run_number }}-linux-${{ matrix.arch }}.tar.gz
           
       - name: Update Cache & Clean Artifacts
         run: |
@@ -83,7 +90,7 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nginx-mainline-mk-${{ env.VERSION }}-${{ github.run_number }}-${{ matrix.suffix }}
+          name: nginx-mainline-mk-${{ env.VERSION }}-${{ github.run_number }}-linux-${{ matrix.arch }}
           path: |
             ./output/*.tar.gz
             ./output/*.tar.gz
@@ -97,7 +104,7 @@ jobs:
           echo "Processing Build Reports..."
           
           # Initialize report
-          echo "# 🏗️ Nginx Build Report (${{ matrix.suffix }})" > report.md
+          echo "# 🏗️ Nginx Build Report (Debian ${{ matrix.arch }})" > report.md
           
           if [ -f ./output/build_summary.json ]; then
             cat ./output/build_summary.json | jq -r '
@@ -123,33 +130,171 @@ jobs:
         uses: thollander/actions-comment-pull-request@v2
         with:
           filePath: report.md
-          comment_tag: build_report_${{ matrix.suffix }}
+          comment_tag: build_report_debian_${{ matrix.arch }}
           
       - name: Generate Checksums
         if: github.ref == 'refs/heads/master'
         run: |
           cd output
-          sha256sum *.tar.gz > sha256sums-${{ matrix.suffix }}.txt
+          sha256sum *.tar.gz > sha256sums-debian-${{ matrix.arch }}.txt
           cd ..
           
       - name: Upload Checksums
         if: github.ref == 'refs/heads/master'
         uses: actions/upload-artifact@v4
         with:
-          name: sha256sums-${{ matrix.suffix }}
+          name: sha256sums-debian-${{ matrix.arch }}
           path: ./output/sha256sums-*.txt
 
-  test:
-    needs: build
-    # Test on all triggered branches (master & feat/**)
+  build-alpine:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    outputs:
+      version: ${{ steps.nginx_version.outputs.version }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Resolve Nginx Version (Env)
+        id: nginx_version
+        run: |
+          # Ensure we're in the correct directory
+          cd $GITHUB_WORKSPACE
+          
+          # Verify versions.env exists
+          if [ ! -f "versions.env" ]; then
+            echo "❌ ERROR: versions.env file not found in $GITHUB_WORKSPACE"
+            echo "Available files:"
+            ls -la
+            exit 1
+          fi
+          
+          # Load pinned versions
+          source versions.env
+          echo "Using Pinned Nginx Version: $NGINX_VERSION"
+          echo "VERSION=$NGINX_VERSION" >> $GITHUB_ENV
+          echo "version=$NGINX_VERSION" >> $GITHUB_OUTPUT
+      
+      - name: Cache Sources
+        uses: actions/cache@v3
+        with:
+          path: downloads
+          key: source-cache-${{ hashFiles('versions.env') }}
+          
+      - name: Prepare Cache Directory
+        run: mkdir -p downloads
+
+      
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Build and Export
+        run: |
+          docker buildx build \
+            --platform linux/${{ matrix.arch }} \
+            --build-arg NGINX_VERSION=${{ env.VERSION }} \
+            --file Dockerfile.alpine \
+            --output type=local,dest=./output \
+            .
+      
+      - name: Rename Artifact
+        run: |
+          mv ./output/nginx-custom.tar.gz ./output/nginx-mainline-mk-${{ env.VERSION }}-${{ github.run_number }}-alpine-${{ matrix.arch }}.tar.gz
+          
+      - name: Update Cache & Clean Artifacts
+        run: |
+           if [ -d "./output/downloads" ]; then
+              echo "Updating cache from build output..."
+              mv ./output/downloads/* downloads/
+              rm -rf ./output/downloads
+           fi
+          
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nginx-mainline-mk-${{ env.VERSION }}-${{ github.run_number }}-alpine-${{ matrix.arch }}
+          path: |
+            ./output/*.tar.gz
+            ./output/*.tar.gz
+            ./output/expected_modules.txt
+            ./output/build_summary.json
+
+      - name: Generate Build Report
+        if: always()
+        id: report
+        run: |
+          echo "Processing Build Reports..."
+          
+          # Initialize report
+          echo "# 🏗️ Nginx Build Report (Alpine ${{ matrix.arch }})" > report.md
+          
+          if [ -f ./output/build_summary.json ]; then
+            cat ./output/build_summary.json | jq -r '
+              "## 📊 Build Metrics
+              | Metric | Value |
+              | :--- | :--- |
+              | **Nginx Version** | \(.nginx_version) |
+              | **OpenSSL Version** | \(.openssl_version) |
+              | **Checksum Verification** | \(.checksum_verified | if . then "✅ PASS" else "❌ FAIL" end) |
+              | **Size (Before Strip)** | \((.size_before_strip | tonumber / 1024 / 1024 | .*100 | round / 100)) MB |
+              | **Size (After Strip)** | \((.size_after_strip | tonumber / 1024 / 1024 | .*100 | round / 100)) MB |
+              | **Reduction** | \(((.size_before_strip | tonumber) - (.size_after_strip | tonumber)) / 1024 / 1024 | .*100 | round / 100) MB |
+              "
+            ' >> report.md
+          else
+             echo "⚠️ No build summary found." >> report.md
+          fi
+          
+          cat report.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: thollander/actions-comment-pull-request@v2
+        with:
+          filePath: report.md
+          comment_tag: build_report_alpine_${{ matrix.arch }}
+          
+      - name: Generate Checksums
+        if: github.ref == 'refs/heads/master'
+        run: |
+          cd output
+          sha256sum *.tar.gz > sha256sums-alpine-${{ matrix.arch }}.txt
+          cd ..
+          
+      - name: Upload Checksums
+        if: github.ref == 'refs/heads/master'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sha256sums-alpine-${{ matrix.arch }}
+          path: ./output/sha256sums-*.txt
+
+  test-debian:
+    needs: [build-debian, build-alpine]
+    # Test Debian builds on all triggered branches (master & feat/**)
     uses: ./.github/workflows/test.yml
     with:
-      version: ${{ needs.build.outputs.version }}-${{ github.run_number }}
+      version: ${{ needs.build-debian.outputs.version }}-${{ github.run_number }}
+      issue_number: "1"
+    secrets: inherit
+
+  test-alpine:
+    needs: [build-debian, build-alpine]
+    # Test Alpine builds on all triggered branches (master & feat/**)
+    uses: ./.github/workflows/test-alpine.yml
+    with:
+      version: ${{ needs.build-alpine.outputs.version }}-${{ github.run_number }}
       issue_number: "1"
     secrets: inherit
 
   release:
-    needs: test
+    needs: [test-debian, test-alpine]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/master'
     steps:
@@ -164,6 +309,18 @@ jobs:
       - name: Resolve Nginx Version (Again for Release)
         id: nginx_version_release
         run: |
+          # Ensure we're in the correct directory
+          cd $GITHUB_WORKSPACE
+          
+          # Verify versions.env exists
+          if [ ! -f "versions.env" ]; then
+            echo "❌ ERROR: versions.env file not found in $GITHUB_WORKSPACE"
+            echo "Available files:"
+            ls -la
+            exit 1
+          fi
+          
+          # Load pinned versions
           source versions.env
           echo "VERSION=$NGINX_VERSION" >> $GITHUB_ENV
           
@@ -178,11 +335,125 @@ jobs:
           # No merging of checksums anymore, we keep separate files for amd64 and arm64
           ls -l release_files/
           
+      - name: Determine Release Type
+        id: release_type
+        run: |
+          # Extract minor version number (second number in version)
+          MINOR_VERSION=$(echo "${{ env.VERSION }}" | cut -d. -f2)
+          
+          # Nginx uses odd minor versions for mainline, even for stable
+          if [ $((MINOR_VERSION % 2)) -eq 1 ]; then
+            echo "RELEASE_TYPE=mainline" >> $GITHUB_OUTPUT
+            echo "RELEASE_LABEL=Mainline" >> $GITHUB_OUTPUT
+          else
+            echo "RELEASE_TYPE=stable" >> $GITHUB_OUTPUT
+            echo "RELEASE_LABEL=Stable" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Generate Release Description
+        id: release_description
+        run: |
+          cat > release_notes.md << 'EOF'
+          # Nginx ${{ steps.release_type.outputs.RELEASE_LABEL }} Build
+          
+          This release contains custom-built Nginx ${{ env.VERSION }} binaries with enhanced modules for both **Debian/glibc** and **Alpine/musl** environments.
+          
+          ## 📦 Available Artifacts
+          
+          This release includes **four** pre-compiled binaries:
+          
+          ### Debian Builds (glibc-based)
+          - **`nginx-mainline-mk-${{ env.VERSION }}-${{ github.run_number }}-linux-amd64.tar.gz`** - Debian/Ubuntu x86_64 (AMD64)
+          - **`nginx-mainline-mk-${{ env.VERSION }}-${{ github.run_number }}-linux-arm64.tar.gz`** - Debian/Ubuntu ARM64 (aarch64)
+          
+          ### Alpine Builds (musl-based)
+          - **`nginx-mainline-mk-${{ env.VERSION }}-${{ github.run_number }}-alpine-amd64.tar.gz`** - Alpine Linux x86_64 (AMD64)
+          - **`nginx-mainline-mk-${{ env.VERSION }}-${{ github.run_number }}-alpine-arm64.tar.gz`** - Alpine Linux ARM64 (aarch64)
+          
+          ## 🔍 Mainline vs Stable
+          
+          **This is a ${{ steps.release_type.outputs.RELEASE_LABEL }} release.**
+          
+          - **Mainline** (odd minor versions like 1.29.x): Latest features and improvements, recommended for most users
+          - **Stable** (even minor versions like 1.28.x): Production-tested, receives only critical fixes
+          
+          ## 🔄 Debian vs Alpine Differences
+          
+          ### Debian Builds
+          - **C Library**: GNU C Library (glibc)
+          - **Optimization**: `-O2` (performance-focused)
+          - **Target**: Debian, Ubuntu, and most mainstream Linux distributions
+          - **Size**: Larger binaries with more features
+          - **Compatibility**: Broader compatibility with existing tools
+          
+          ### Alpine Builds
+          - **C Library**: musl libc
+          - **Optimization**: `-Os` (size-focused)
+          - **Target**: Alpine Linux, container-optimized environments
+          - **Size**: Smaller binaries, ideal for containers
+          - **Security**: Minimal attack surface
+          
+          ## 📋 Included Modules
+          
+          Both Debian and Alpine builds include the same set of modules:
+          - ngx_brotli (Brotli compression)
+          - zstd-nginx-module (Zstandard compression)
+          - lua-nginx-module (Lua scripting with LuaJIT)
+          - ngx_http_geoip2_module (GeoIP2 support)
+          - nginx-rtmp-module (RTMP streaming)
+          - And many more standard modules
+          
+          See `expected_modules.txt` for the complete list.
+          
+          ## ✅ Verification
+          
+          Verify artifact integrity using the provided checksums:
+          ```bash
+          # For Debian AMD64
+          sha256sum -c sha256sums-debian-amd64.txt
+          
+          # For Alpine AMD64
+          sha256sum -c sha256sums-alpine-amd64.txt
+          ```
+          
+          ## 🚀 Quick Start
+          
+          ### Debian/Ubuntu
+          ```bash
+          # Download and extract
+          wget https://github.com/yourusername/nginx-builder-ng/releases/download/nginx-mainline-mk/${{ env.VERSION }}-${{ github.run_number }}/nginx-mainline-mk-${{ env.VERSION }}-${{ github.run_number }}-linux-amd64.tar.gz
+          tar -xzf nginx-mainline-mk-${{ env.VERSION }}-${{ github.run_number }}-linux-amd64.tar.gz -C /
+          
+          # Start nginx
+          /usr/sbin/nginx
+          ```
+          
+          ### Alpine Linux
+          ```bash
+          # Install runtime dependencies
+          apk add --no-cache libmaxminddb libxml2 libxslt gd linux-pam zstd-libs pcre2 openssl perl tzdata luajit
+          
+          # Download and extract
+          wget https://github.com/yourusername/nginx-builder-ng/releases/download/nginx-mainline-mk/${{ env.VERSION }}-${{ github.run_number }}/nginx-mainline-mk-${{ env.VERSION }}-${{ github.run_number }}-alpine-amd64.tar.gz
+          tar -xzf nginx-mainline-mk-${{ env.VERSION }}-${{ github.run_number }}-alpine-amd64.tar.gz -C /
+          
+          # Start nginx
+          /usr/sbin/nginx
+          ```
+          
+          ## 📚 Documentation
+          
+          For detailed usage instructions, configuration examples, and troubleshooting, see the [README](https://github.com/yourusername/nginx-builder-ng/blob/master/README.md).
+          EOF
+          
+          cat release_notes.md
+          
       - name: Publish Release (Dynamic Tag)
         uses: softprops/action-gh-release@v1
         with:
           tag_name: nginx-mainline-mk/${{ env.VERSION }}-${{ github.run_number }}
-          name: Nginx Mainline MK ${{ env.VERSION }} Build ${{ github.run_number }}
+          name: Nginx ${{ steps.release_type.outputs.RELEASE_LABEL }} MK ${{ env.VERSION }} Build ${{ github.run_number }}
+          body_path: release_notes.md
           files: release_files/*
           prerelease: false
           fail_on_unmatched_files: true
