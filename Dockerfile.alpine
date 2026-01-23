@@ -40,6 +40,8 @@ RUN apk add --no-cache \
     zstd-dev \
     libxml2-dev \
     luajit-dev \
+    libaio-dev \
+    linux-headers \
     dos2unix
 
 # Copy Build Script
