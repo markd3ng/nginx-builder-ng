@@ -35,6 +35,10 @@ jobs:
             perl \
             tzdata \
             luajit
+          
+          # Create www-data user and group for nginx
+          addgroup -g 82 -S www-data
+          adduser -u 82 -D -S -G www-data www-data
 
       - name: Download Artifact
         uses: actions/download-artifact@v4
