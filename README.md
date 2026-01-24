@@ -5,6 +5,8 @@
 [![Build Status](https://github.com/markd3ng/nginx-builder-ng/actions/workflows/build.yml/badge.svg)](https://github.com/markd3ng/nginx-builder-ng/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+English | [简体中文](README.zh-CN.md)
+
 **nginx-builder-ng** is an automated build system that compiles feature-rich Nginx binaries from source with a comprehensive suite of third-party modules. Designed for production environments, it provides optimized builds for both Debian/glibc and Alpine/musl platforms.
 
 ## 🎯 Why nginx-builder-ng?
