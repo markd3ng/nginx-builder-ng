@@ -1,45 +1,62 @@
 # Nginx Builder NG (Next Generation)
 
-> **The engine room for the modern Nginx Proxy Manager ecosystem.**
+> **Production-ready Nginx builds with advanced modules for modern web infrastructure.**
 
 [![Build Status](https://github.com/markd3ng/nginx-builder-ng/actions/workflows/build.yml/badge.svg)](https://github.com/markd3ng/nginx-builder-ng/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**nginx-builder-ng** is a specialized build system that compiles a "fat" Nginx binary from source. It is designed to provide a feature-rich, high-performance Nginx core for downstream projects like [nginx-proxy-manager-app](https://github.com/markd3ng/nginx-proxy-manager-app).
+**nginx-builder-ng** is an automated build system that compiles feature-rich Nginx binaries from source with a comprehensive suite of third-party modules. Designed for production environments, it provides optimized builds for both Debian/glibc and Alpine/musl platforms.
 
-Unlike standard distribution packages (`apt-get install nginx`), this builder produces a statically compiled binary packed with numerous 3rd-party modules that are critical for advanced proxying, security, and performance.
+## 🎯 Why nginx-builder-ng?
+
+- **Zero Dependency Hell**: All critical modules compiled in, no runtime surprises
+- **Production Tested**: Automated CI/CD pipeline with comprehensive testing
+- **Multi-Platform**: Native AMD64 and ARM64 support for both Debian and Alpine
+- **Always Current**: Tracks Nginx mainline with latest security patches
+- **Fully Automated**: Weekly builds ensure you're always up-to-date
 
 ## 🚀 Key Features
 
-*   **Static Compilation**: Critical modules (Brotli, Zstd, ModSecurity, LuaJIT) are compiled directly into the binary or verified dynamic libraries, ensuring zero dependency hell at runtime.
-*   **Modern Stack**: Builds against:
-    *   **Nginx**: Mainline (Rolling Release)
-    *   **OpenSSL**: 3.x (with TLS 1.3+ optimizations)
-    *   **PCRE2**: Enabled with JIT support
-*   **Multi-Architecture**: Native support for **AMD64 (x86_64)** and **ARM64 (aarch64)** via Docker Buildx.
-*   **Dual OS Support**: Parallel builds for both **Debian (glibc)** and **Alpine Linux (musl libc)** environments.
-*   **Self-Describing**: Generates a signature file (`expected_modules.txt`) that downstream pipelines use to verify capability integrity before deployment.
-*   **Docker Optimized**: Output is a tarball specifically structured for layering into lightweight Distroless, Slim Debian, or Alpine Docker images.
+- **Dual OS Support**: Parallel builds for **Debian (glibc)** and **Alpine Linux (musl libc)**
+- **Multi-Architecture**: Native **AMD64 (x86_64)** and **ARM64 (aarch64)** via Docker Buildx
+- **Modern Stack**: 
+  - **Nginx**: 1.29.4 (Mainline)
+  - **OpenSSL**: 3.5.0 (TLS 1.3+)
+  - **PCRE2**: 10.42 (with JIT)
+  - **Zlib**: 1.3.1
+- **Rich Module Set**: 14+ third-party modules including Brotli, Zstd, LuaJIT, GeoIP2, RTMP
+- **Automated Testing**: Every build tested in real Alpine and Debian containers
+- **Integrity Verified**: SHA256 checksums for all artifacts
 
 ## 📦 Included Modules
 
-This builder includes a comprehensive suite of modules:
+All builds include the same comprehensive module set:
 
-| Category | Module | Repository | Purpose |
-| :--- | :--- | :--- | :--- |
-| **Compression** | **Brotli** | `google/ngx_brotli` | High-performance compression algorithm. |
-| | **Zstd** | `tokers/zstd-nginx-module` | Modern real-time compression fast standard. |
-| **Scripting** | **LuaJIT** | `openresty/lua-nginx-module` | Embed Lua scripts in Nginx config. |
-| | **Echo** | `openresty/echo-nginx-module` | Debugging and shell-style text output in responses. |
-| **Security** | **Auth PAM** | `sto/ngx_http_auth_pam_module` | PAM authentication support. |
-| **Traffic** | **GeoIP2** | `leev/ngx_http_geoip2_module` | IP geolocation support (MaxMind). |
-| | **Cache Purge** | `nginx-modules/ngx_cache_purge` | Selective content cache purging. |
-| | **Upload Progress** | `masterzen/nginx-upload-progress-module` | Track upload status for UI. |
-| **Features** | **Headers More** | `openresty/headers-more-nginx-module` | Set/Clear any headers (input/output). |
-| | **Substitutions** | `yaoweibin/ngx_http_substitutions_filter_module` | Regex-based response body replacement. |
-| | **Fancy Index** | `aperezdc/ngx-fancyindex` | Beautiful directory listings. |
-| | **RTMP** | `arut/nginx-rtmp-module` | Live streaming (HLS/RTMP) support. |
-| | **DAV Ext** | `arut/nginx-dav-ext-module` | Full WebDAV support (PUT, DELETE, MKCOL, etc). |
-| | **Nchan** | `slact/nchan` | Flexible Pub/Sub server. |
+| Category | Module | Purpose |
+| :--- | :--- | :--- |
+| **Compression** | Brotli | High-performance compression (Google) |
+| | Zstd | Modern real-time compression |
+| **Scripting** | LuaJIT | Embed Lua scripts in Nginx config |
+| | Echo | Debugging and text output |
+| | Set Misc | Additional variables and functions |
+| **Security** | Auth PAM | PAM authentication support |
+| **Traffic** | GeoIP2 | IP geolocation (MaxMind) |
+| | Cache Purge | Selective cache purging |
+| | Upload Progress | Track upload status |
+| **Features** | Headers More | Advanced header manipulation |
+| | Substitutions | Regex-based body replacement |
+| | Fancy Index | Beautiful directory listings |
+| | RTMP | Live streaming (HLS/RTMP) |
+| | DAV Ext | Full WebDAV support |
+| | Nchan | Pub/Sub messaging |
+
+**Standard Modules Enabled:**
+- HTTP/2, HTTP/3 (QUIC)
+- SSL/TLS with OpenSSL 3.5
+- Gzip, Gunzip, Gzip Static
+- RealIP, Stub Status, Auth Request
+- Stream (TCP/UDP proxy)
+- Mail proxy (SMTP/POP3/IMAP)
 
 ## 🛠️ Architecture
 
@@ -69,6 +86,82 @@ graph TD
     end
 ```
 
+## 📥 Quick Start
+
+### Download Pre-built Binaries
+
+Visit the [Releases page](https://github.com/markd3ng/nginx-builder-ng/releases) to download the latest builds.
+
+**Artifact naming convention:**
+```
+nginx-mainline-mk-{VERSION}-{BUILD}-{OS}-{ARCH}.tar.gz
+
+Examples:
+- nginx-mainline-mk-1.29.4-18-linux-amd64.tar.gz   (Debian x86_64)
+- nginx-mainline-mk-1.29.4-18-alpine-amd64.tar.gz  (Alpine x86_64)
+- nginx-mainline-mk-1.29.4-18-linux-arm64.tar.gz   (Debian ARM64)
+- nginx-mainline-mk-1.29.4-18-alpine-arm64.tar.gz  (Alpine ARM64)
+```
+
+### Debian/Ubuntu Installation
+
+```bash
+# Download artifact
+VERSION="1.29.4"
+BUILD="18"
+ARCH="amd64"
+wget https://github.com/markd3ng/nginx-builder-ng/releases/download/nginx-mainline-mk%2F${VERSION}-${BUILD}/nginx-mainline-mk-${VERSION}-${BUILD}-linux-${ARCH}.tar.gz
+
+# Verify checksum
+wget https://github.com/markd3ng/nginx-builder-ng/releases/download/nginx-mainline-mk%2F${VERSION}-${BUILD}/sha256sums-debian-${ARCH}.txt
+sha256sum -c sha256sums-debian-${ARCH}.txt --ignore-missing
+
+# Install
+sudo tar -xzf nginx-mainline-mk-${VERSION}-${BUILD}-linux-${ARCH}.tar.gz -C /
+
+# Create user if needed
+sudo useradd -r -s /bin/false www-data 2>/dev/null || true
+
+# Create directories
+sudo mkdir -p /var/log/nginx /var/cache/nginx
+
+# Test
+/usr/sbin/nginx -V
+```
+
+### Alpine Linux Installation
+
+```bash
+# Install runtime dependencies
+apk add --no-cache \
+    libmaxminddb libxml2 libxslt gd \
+    linux-pam zstd-libs pcre2 openssl \
+    perl tzdata luajit
+
+# Download artifact
+VERSION="1.29.4"
+BUILD="18"
+ARCH="amd64"
+wget https://github.com/markd3ng/nginx-builder-ng/releases/download/nginx-mainline-mk%2F${VERSION}-${BUILD}/nginx-mainline-mk-${VERSION}-${BUILD}-alpine-${ARCH}.tar.gz
+
+# Verify checksum
+wget https://github.com/markd3ng/nginx-builder-ng/releases/download/nginx-mainline-mk%2F${VERSION}-${BUILD}/sha256sums-alpine-${ARCH}.txt
+sha256sum -c sha256sums-alpine-${ARCH}.txt 2>&1 | grep alpine
+
+# Install
+tar -xzf nginx-mainline-mk-${VERSION}-${BUILD}-alpine-${ARCH}.tar.gz -C /
+
+# Create user if needed
+addgroup -g 82 -S www-data 2>/dev/null || true
+adduser -u 82 -D -S -G www-data www-data 2>/dev/null || true
+
+# Create directories
+mkdir -p /var/log/nginx /var/cache/nginx
+
+# Test
+/usr/sbin/nginx -V
+```
+
 ## ⚙️ Usage
 
 ### Alpine vs Debian Builds
@@ -93,67 +186,61 @@ This project provides two parallel build variants to support different deploymen
 
 ### Consumption in Dockerfile (Debian)
 
-To use the Debian artifacts in your project:
-
 ```dockerfile
-# Example Dockerfile for Debian-based images
-# TAG format: nginx-mainline-mk/{VERSION}-{RUN_NUMBER}
-ARG RELEASE_TAG=nginx-mainline-mk%2F1.29.4-40
-ARG VERSION=1.29.4
-ARG RUN_NUM=40
-ARG ARCH=amd64
-
 FROM debian:bookworm-slim
 
-# Download Debian Artifact
-ADD https://github.com/markd3ng/nginx-builder-ng/releases/download/${RELEASE_TAG}/nginx-mainline-mk-${VERSION}-${RUN_NUM}-linux-${ARCH}.tar.gz /tmp/nginx.tar.gz
+# Set build arguments
+ARG VERSION=1.29.4
+ARG BUILD=18
+ARG ARCH=amd64
 
-# Install
+# Download and install Nginx
+ADD https://github.com/markd3ng/nginx-builder-ng/releases/download/nginx-mainline-mk%2F${VERSION}-${BUILD}/nginx-mainline-mk-${VERSION}-${BUILD}-linux-${ARCH}.tar.gz /tmp/nginx.tar.gz
+
 RUN tar -xzf /tmp/nginx.tar.gz -C / \
     && rm /tmp/nginx.tar.gz \
     && useradd -r -s /bin/false www-data \
     && mkdir -p /var/log/nginx /var/cache/nginx
+
+# Verify installation
+RUN /usr/sbin/nginx -V
+
+EXPOSE 80 443
+STOPSIGNAL SIGQUIT
+CMD ["nginx", "-g", "daemon off;"]
 ```
 
 ### Consumption in Dockerfile (Alpine)
 
-To use the Alpine artifacts in your project:
-
 ```dockerfile
-# Example Dockerfile for Alpine-based images
-# TAG format: nginx-mainline-mk/{VERSION}-{RUN_NUMBER}
-ARG RELEASE_TAG=nginx-mainline-mk%2F1.29.4-40
-ARG VERSION=1.29.4
-ARG RUN_NUM=40
-ARG ARCH=amd64
-
 FROM alpine:3.19
+
+# Set build arguments
+ARG VERSION=1.29.4
+ARG BUILD=18
+ARG ARCH=amd64
 
 # Install runtime dependencies
 RUN apk add --no-cache \
-    libmaxminddb \
-    libxml2 \
-    libxslt \
-    gd \
-    linux-pam \
-    zstd-libs \
-    pcre2 \
-    openssl \
-    perl \
-    tzdata \
-    luajit
+    libmaxminddb libxml2 libxslt gd \
+    linux-pam zstd-libs pcre2 openssl \
+    perl tzdata luajit
 
-# Download Alpine Artifact
-ADD https://github.com/markd3ng/nginx-builder-ng/releases/download/${RELEASE_TAG}/nginx-mainline-mk-${VERSION}-${RUN_NUM}-alpine-${ARCH}.tar.gz /tmp/nginx.tar.gz
+# Download and install Nginx
+ADD https://github.com/markd3ng/nginx-builder-ng/releases/download/nginx-mainline-mk%2F${VERSION}-${BUILD}/nginx-mainline-mk-${VERSION}-${BUILD}-alpine-${ARCH}.tar.gz /tmp/nginx.tar.gz
 
-# Install
 RUN tar -xzf /tmp/nginx.tar.gz -C / \
     && rm /tmp/nginx.tar.gz \
-    && adduser -D -S -h /var/cache/nginx -s /sbin/nologin -G www-data www-data \
+    && addgroup -g 82 -S www-data 2>/dev/null || true \
+    && adduser -u 82 -D -S -G www-data www-data 2>/dev/null || true \
     && mkdir -p /var/log/nginx /var/cache/nginx
 
 # Verify installation
 RUN /usr/sbin/nginx -V
+
+EXPOSE 80 443
+STOPSIGNAL SIGQUIT
+CMD ["nginx", "-g", "daemon off;"]
 ```
 
 ### Alpine Runtime Dependencies
@@ -179,118 +266,200 @@ When deploying Alpine builds, ensure these runtime packages are installed:
 All releases include SHA256 checksums for verification:
 
 ```bash
-# Download the artifact and checksum file
-wget https://github.com/markd3ng/nginx-builder-ng/releases/download/nginx-mainline-mk%2F1.29.4-40/nginx-mainline-mk-1.29.4-40-alpine-amd64.tar.gz
-wget https://github.com/markd3ng/nginx-builder-ng/releases/download/nginx-mainline-mk%2F1.29.4-40/sha256sums-amd64.txt
+# For Debian builds
+wget https://github.com/markd3ng/nginx-builder-ng/releases/download/nginx-mainline-mk%2F1.29.4-18/sha256sums-debian-amd64.txt
+sha256sum -c sha256sums-debian-amd64.txt --ignore-missing
 
-# Verify checksum (Linux/macOS)
-sha256sum -c sha256sums-amd64.txt --ignore-missing
+# For Alpine builds
+wget https://github.com/markd3ng/nginx-builder-ng/releases/download/nginx-mainline-mk%2F1.29.4-18/sha256sums-alpine-amd64.txt
+sha256sum -c sha256sums-alpine-amd64.txt 2>&1 | grep alpine-amd64
 
-# Verify checksum (Alpine)
-sha256sum -c sha256sums-amd64.txt 2>&1 | grep alpine-amd64
-
-# Expected output: nginx-mainline-mk-1.29.4-40-alpine-amd64.tar.gz: OK
+# Expected output: nginx-mainline-mk-1.29.4-18-alpine-amd64.tar.gz: OK
 ```
+
+## 🏗️ Building from Source
+
+### Prerequisites
+
+- Docker with Buildx support
+- Git
+
+### Build Commands
+
+```bash
+# Clone repository
+git clone https://github.com/markd3ng/nginx-builder-ng.git
+cd nginx-builder-ng
+
+# Build Debian version (AMD64)
+docker buildx build \
+  --platform linux/amd64 \
+  --build-arg NGINX_VERSION=1.29.4 \
+  --output type=local,dest=./output \
+  .
+
+# Build Alpine version (AMD64)
+docker buildx build \
+  --platform linux/amd64 \
+  --build-arg NGINX_VERSION=1.29.4 \
+  --file Dockerfile.alpine \
+  --output type=local,dest=./output \
+  .
+
+# Build for ARM64
+docker buildx build \
+  --platform linux/arm64 \
+  --build-arg NGINX_VERSION=1.29.4 \
+  --file Dockerfile.alpine \
+  --output type=local,dest=./output \
+  .
+```
+
+### Customizing Versions
+
+Edit `versions.env` to change component versions:
+
+```bash
+# Nginx Mainline
+NGINX_VERSION="1.29.4"
+NGINX_SHA256="..."
+
+# Libraries
+OPENSSL_VERSION="3.5.0"
+PCRE2_VERSION="10.42"
+ZLIB_VERSION="1.3.1"
+```
+
+Commit the changes to trigger automated builds via GitHub Actions.
 
 ## 🔧 Troubleshooting
 
-For detailed Alpine-specific troubleshooting, see [Alpine Troubleshooting Guide](docs/ALPINE_TROUBLESHOOTING.md).
+### Common Issues
 
-### Alpine-Specific Issues
+#### 1. Wrong Artifact Type
 
-#### Missing Dynamic Libraries
+**Symptom**: Binary fails with "not found" error even though file exists
 
-**Symptom**: Error message like `Error loading shared library libluajit-5.1.so.2: No such file or directory`
+**Solution**: Ensure you're using the correct artifact for your OS:
+- Alpine containers → `*-alpine-*.tar.gz`
+- Debian/Ubuntu → `*-linux-*.tar.gz`
 
-**Solution**: Install the missing runtime dependencies:
 ```bash
-apk add --no-cache libmaxminddb libxml2 libxslt gd linux-pam zstd-libs pcre2 openssl perl tzdata luajit
+# Check your OS
+cat /etc/os-release
+
+# Alpine will show: ID=alpine
+# Debian will show: ID=debian
 ```
 
-**Root Cause**: Alpine builds dynamically link to system libraries. Ensure all runtime dependencies listed above are installed in your container.
+#### 2. Missing Runtime Dependencies (Alpine)
 
-#### musl libc Compatibility Issues
+**Symptom**: `Error loading shared library libluajit-5.1.so.2`
 
-**Symptom**: Nginx binary fails to start with segmentation fault or "not found" errors
-
-**Solution**: 
-1. Verify you're using the Alpine artifact (filename contains `alpine`), not the Debian artifact
-2. Ensure your base image is Alpine Linux 3.19 or newer:
-   ```dockerfile
-   FROM alpine:3.19
-   ```
-3. Check that musl libc is present:
-   ```bash
-   ldd /usr/sbin/nginx
-   ```
-
-**Root Cause**: Alpine uses musl libc while Debian uses glibc. These are binary-incompatible. Always use Alpine artifacts with Alpine containers and Debian artifacts with Debian/Ubuntu containers.
-
-#### Verifying Module Integrity
-
-**Symptom**: Uncertain if all expected modules are compiled into the binary
-
-**Solution**: Check the compiled modules:
+**Solution**: Install all required runtime packages:
 ```bash
-# List all compiled modules
-/usr/sbin/nginx -V 2>&1 | grep -o 'with-[^ ]*'
-
-# Verify against expected modules
-wget https://github.com/markd3ng/nginx-builder-ng/releases/download/nginx-mainline-mk%2F1.29.4-40/expected_modules.txt
-/usr/sbin/nginx -V 2>&1 | grep -f expected_modules.txt
+apk add --no-cache \
+    libmaxminddb libxml2 libxslt gd \
+    linux-pam zstd-libs pcre2 openssl \
+    perl tzdata luajit
 ```
 
-**Root Cause**: Build issues or incomplete downloads can result in missing modules. The `expected_modules.txt` file provides a reference for validation.
+#### 3. www-data User Missing
 
-#### Binary Size Concerns
+**Symptom**: `nginx: [emerg] getpwnam("www-data") failed`
 
-**Symptom**: Alpine binary is larger than expected
-
-**Solution**: Alpine binaries are optimized for size (`-Os` flag) and should be 15-20% smaller than Debian builds. Typical sizes:
-- Alpine AMD64: ~12-15 MB (stripped)
-- Debian AMD64: ~15-20 MB (stripped)
-
-If significantly larger, verify:
+**Solution**: Create the www-data user:
 ```bash
-# Check if binary is stripped
-file /usr/sbin/nginx
-# Should show: "stripped"
+# Debian/Ubuntu
+useradd -r -s /bin/false www-data
 
-# Check actual size
-ls -lh /usr/sbin/nginx
+# Alpine
+addgroup -g 82 -S www-data
+adduser -u 82 -D -S -G www-data www-data
 ```
 
-### General Issues
+#### 4. Permission Errors
 
-#### Checksum Verification Fails
+**Symptom**: Cannot create PID file or log files
 
-**Symptom**: `sha256sum` reports checksum mismatch
-
-**Solution**:
-1. Re-download the artifact (may be corrupted)
-2. Ensure you're comparing the correct checksum file for your architecture
-3. Verify download completed fully:
-   ```bash
-   # Check file size matches expected
-   ls -lh nginx-mainline-mk-*.tar.gz
-   ```
-
-#### Permission Errors
-
-**Symptom**: Nginx fails to start with permission denied errors
-
-**Solution**:
+**Solution**: Create required directories:
 ```bash
-# Ensure nginx binary is executable
-chmod +x /usr/sbin/nginx
-
-# Create required directories with correct permissions
 mkdir -p /var/log/nginx /var/cache/nginx /var/run
 chown -R www-data:www-data /var/log/nginx /var/cache/nginx
 ```
 
+#### 5. Module Verification
+
+**Symptom**: Unsure if all modules are present
+
+**Solution**: Check compiled modules:
+```bash
+# List all modules
+/usr/sbin/nginx -V 2>&1 | grep -o 'with-[^ ]*'
+
+# Download expected modules list
+wget https://github.com/markd3ng/nginx-builder-ng/releases/download/nginx-mainline-mk%2F1.29.4-18/expected_modules.txt
+
+# Verify
+/usr/sbin/nginx -V 2>&1 | grep -f expected_modules.txt
+```
+
+### Detailed Troubleshooting
+
+For comprehensive Alpine-specific troubleshooting, see [Alpine Troubleshooting Guide](docs/ALPINE_TROUBLESHOOTING.md).
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+### Development Workflow
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Test locally with Docker
+5. Commit your changes (`git commit -m 'Add amazing feature'`)
+6. Push to the branch (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
+
+### Reporting Issues
+
+When reporting issues, please include:
+- OS and architecture (Debian/Alpine, AMD64/ARM64)
+- Nginx version and build number
+- Full error message
+- Output of `/usr/sbin/nginx -V`
+- Output of `ldd /usr/sbin/nginx` (for library issues)
+
+## 📊 CI/CD Pipeline
+
+This project uses GitHub Actions for automated builds:
+
+- **Trigger**: Push to master, weekly schedule, or manual dispatch
+- **Build Matrix**: 2 OS types × 2 architectures = 4 parallel builds
+- **Testing**: Automated tests in real Alpine and Debian containers
+- **Release**: Automatic GitHub Releases with all artifacts and checksums
+
+View the [latest builds](https://github.com/markd3ng/nginx-builder-ng/actions).
+
 ## 📝 License
 
-MIT License. See [LICENSE](LICENSE) file.
+MIT License - see [LICENSE](LICENSE) file for details.
 
-Based on work from the Open Source Nginx community.
+## 🙏 Acknowledgments
+
+Built with components from:
+- [Nginx](https://nginx.org/) - High-performance HTTP server
+- [OpenSSL](https://www.openssl.org/) - Cryptography and SSL/TLS toolkit
+- [OpenResty](https://openresty.org/) - LuaJIT and Lua modules
+- All third-party module authors
+
+## 📮 Support
+
+- **Issues**: [GitHub Issues](https://github.com/markd3ng/nginx-builder-ng/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/markd3ng/nginx-builder-ng/discussions)
+- **Documentation**: [docs/](docs/)
+
+---
+
+**Note**: This project tracks Nginx mainline releases. For stable releases, check the tags or use specific version numbers.
